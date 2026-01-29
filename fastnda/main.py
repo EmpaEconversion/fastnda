@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 def read(
     file: str | Path,
     cycle_mode: Literal["chg", "dchg", "auto", "raw"] = "chg",
-    output_columns: Literal["default", "bdf"] = "default",
+    columns: Literal["default", "bdf"] = "default",
     *,
     raw_categories: bool = False,
 ) -> pl.DataFrame:
@@ -31,7 +31,7 @@ def read(
             'dchg': Cycle incremented by a discharge step following a charge.
             'auto': Identifies the first non-rest state as the incremental state.
             'raw': Leaves cycles as it is found in the Neware file.
-        output_columns: Selects how to format the output columns
+        columns: Selects how to format the output columns
             'default': fastnda columns, e.g. 'voltage_V', 'current_mA'
             'bdf': battery-data-format columns, e.g. 'voltage_volt', 'current_ampere'
         raw_categories: Return `step_type` column as integer codes.
@@ -97,7 +97,7 @@ def read(
     aux_columns = [name for name in df.columns if name.startswith("aux")]
     df = df.select(non_aux_columns + aux_columns)
 
-    if output_columns == "bdf":
+    if columns == "bdf":
         return to_bdf(df)
     return df
 

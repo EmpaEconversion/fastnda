@@ -310,9 +310,9 @@ class TestRead:
                 # unzip file to a temp location and read
                 zip_test.extractall(tmp_dir)
                 test_file = Path(tmp_dir) / test_file.stem
-                df_bdf = fastnda.read(test_file, output_columns="bdf")
+                df_bdf = fastnda.read(test_file, columns="bdf")
         else:
-            df_bdf = fastnda.read(test_file, output_columns="bdf")
+            df_bdf = fastnda.read(test_file, columns="bdf")
 
         assert "index" in df_bdf.columns
         assert "voltage_volt" in df_bdf.columns
