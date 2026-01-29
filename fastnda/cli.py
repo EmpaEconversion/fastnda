@@ -51,6 +51,14 @@ PandasOption = Annotated[
         help="Save with old pandas-compatible format (only for parquet, arrow, feather, without --raw-categories).",
     ),
 ]
+ColumnsOption = Annotated[
+    Literal["default", "bdf"],
+    typer.Option(
+        "--columns",
+        "-c",
+        help="Format of the output columns",
+    ),
+]
 RecursiveOption = Annotated[
     bool,
     typer.Option(
@@ -132,6 +140,7 @@ def convert(
     out_file: OutFileArgument = None,
     file_format: OptionalFormatOption = None,
     cycle_mode: CycleModeOption = "chg",
+    output_columns: ColumnsOption = "default",
     *,
     pandas: PandasOption = False,
     raw_categories: RawCategoriesOption = False,
@@ -147,7 +156,11 @@ def convert(
             'dchg': Cycle incremented by a discharge step following a charge
             'auto': Identifies the first non-rest state as the incremental state
             'raw': Leaves cycles as it is found in the Neware file
+        output_columns: Selects how to format the output columns
+            'default': fastnda columns, e.g. 'voltage_V', 'current_mA'
+            'bdf': battery-data-format columns, e.g. 'voltage_volt', 'current_ampere'
         pandas: Whether to save in old pandas-safe format
+        raw_categories: Return `step_type` column as integer codes.
 
     """
     file_format = file_format or _infer_extension(out_file) or "csv"
@@ -158,7 +171,7 @@ def convert(
         _require_pandas()
     if out_file is None:
         out_file = in_file.with_suffix("." + file_format)
-    _convert_with_type(in_file, out_file, file_format, cycle_mode, pandas, raw_categories)
+    _convert_with_type(in_file, out_file, file_format, cycle_mode, output_columns, pandas, raw_categories)
 
 
 @app.command()
@@ -168,6 +181,7 @@ def batch_convert(
     out_folder: OutFolderArgument = None,
     file_format: FormatOption = "csv",
     cycle_mode: CycleModeOption = "chg",
+    output_columns: ColumnsOption = "default",
     *,
     recursive: RecursiveOption = False,
     pandas: PandasOption = False,
@@ -184,8 +198,12 @@ def batch_convert(
             'dchg': Cycle incremented by a discharge step following a charge
             'auto': Identifies the first non-rest state as the incremental state
             'raw': Leaves cycles as it is found in the Neware file
+        output_columns: Selects how to format the output columns
+            'default': fastnda columns, e.g. 'voltage_V', 'current_mA'
+            'bdf': battery-data-format columns, e.g. 'voltage_volt', 'current_ampere'
         recursive: Whether to search recursively in subfolders
         pandas: Whether to save in old pandas-safe format
+        raw_categories: Return `step_type` column as integer codes.
 
     """
     if file_format in {"h5", "hdf5"}:
@@ -219,7 +237,7 @@ def batch_convert(
         out_file = out_folder / in_file.relative_to(in_folder).with_suffix("." + file_format)
         out_file.parent.mkdir(exist_ok=True)
         try:
-            _convert_with_type(in_file, out_file, file_format, cycle_mode, pandas, raw_categories)
+            _convert_with_type(in_file, out_file, file_format, cycle_mode, output_columns, pandas, raw_categories)
         except (ValueError, BadZipFile, KeyError, AttributeError):
             LOGGER.exception("Failed to convert %s.", in_file)
 
@@ -240,10 +258,16 @@ def _convert_with_type(
     out_file: Path,
     file_format: FormatOption,
     cycle_mode: CycleModeOption,
+    output_columns: ColumnsOption,
     pandas: bool,
     raw_categories: bool,
 ) -> None:
-    df = fastnda.read(in_file, cycle_mode=cycle_mode, raw_categories=raw_categories)
+    df = fastnda.read(
+        in_file,
+        cycle_mode=cycle_mode,
+        output_columns=output_columns,
+        raw_categories=raw_categories,
+    )
 
     match file_format:
         case "csv":
