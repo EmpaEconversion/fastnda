@@ -441,3 +441,40 @@ class TestCliWithOptionalDeps:
             metadata = json.load(f)
         ref_metadata = fastnda.read_metadata(self.test_file)
         assert metadata == ref_metadata
+
+    def test_convert_bdf_csv(self, tmp_path: Path) -> None:
+        """Converting csv with bdf columns."""
+        output = tmp_path / self.test_file.with_suffix(".csv").name
+        result = self.runner.invoke(
+            app,
+            ["convert", str(self.test_file), str(output), "--format=csv", "--columns=bdf"],
+        )
+        assert result.exit_code == 0
+        assert output.exists()
+        df = pl.read_csv(output)
+        assert "current_ampere" in df.columns
+
+    def test_batch_convert_bdf(self, tmp_path: Path) -> None:
+        """Basic batch converting parquet files."""
+        copied_file_1 = tmp_path / (self.test_file.stem + "_1.ndax")
+        copied_file_2 = tmp_path / (self.test_file.stem + "_2.ndax")
+        shutil.copy(self.test_file, copied_file_1)
+        shutil.copy(self.test_file, copied_file_2)
+        output_1 = copied_file_1.with_suffix(".parquet")
+        output_2 = copied_file_2.with_suffix(".parquet")
+        result = self.runner.invoke(
+            app,
+            [
+                "batch-convert",
+                str(tmp_path),
+                "-f",
+                "parquet",
+                "-c",
+                "bdf",
+            ],
+        )
+        assert result.exit_code == 0, result
+        assert output_1.exists()
+        assert output_2.exists()
+        df = pl.read_parquet(output_1)
+        assert "current_ampere" in df.columns
