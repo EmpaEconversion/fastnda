@@ -314,7 +314,7 @@ class TestRead:
         else:
             df_bdf = fastnda.read(test_file, columns="bdf")
 
-        assert "index" in df_bdf.columns
+        assert "record_index" in df_bdf.columns
         assert "voltage_volt" in df_bdf.columns
         assert "current_ampere" in df_bdf.columns
         assert "unix_time_second" in df_bdf.columns

@@ -7,7 +7,7 @@ import polars as pl
 
 BDF_COL_MAP: Mapping[str, str] = MappingProxyType(
     {
-        "index": "index",
+        "index": "record_index",
         "voltage_V": "voltage_volt",
         "current_mA": "current_ampere",
         "unix_time_s": "unix_time_second",
