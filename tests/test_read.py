@@ -319,7 +319,7 @@ class TestRead:
         assert "current_ampere" in df_bdf.columns
         assert "unix_time_second" in df_bdf.columns
         assert "step_time_second" in df_bdf.columns
-        assert "total_time_second" in df_bdf.columns
+        assert "test_time_second" in df_bdf.columns
         assert "cycle_count" in df_bdf.columns
         assert "step_count" in df_bdf.columns
         assert "step_index" in df_bdf.columns

@@ -12,7 +12,7 @@ BDF_COL_MAP: Mapping[str, str] = MappingProxyType(
         "current_mA": "current_ampere",
         "unix_time_s": "unix_time_second",
         "step_time_s": "step_time_second",
-        "total_time_s": "total_time_second",
+        "total_time_s": "test_time_second",
         "cycle_count": "cycle_count",
         "step_count": "step_count",
         "step_index": "step_index",
