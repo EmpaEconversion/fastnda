@@ -41,7 +41,7 @@ def to_bdf(df: pl.DataFrame) -> pl.DataFrame:
         if col.endswith("_V"):
             rename_map[col] = col[:-2] + "_volt"
         elif col.endswith("_degC"):
-            rename_map[col] = col[:-5] + "_celcius"
+            rename_map[col] = col[:-5] + "_celsius"
     if rename_map:
         df = df.rename(rename_map)
 
