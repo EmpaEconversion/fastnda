@@ -300,3 +300,58 @@ class TestRead:
                     f"closest reference was {closest} with an average difference of {results[closest]}"
                 )
                 raise ValueError(msg)
+
+    def test_bdf(self, parsed_data: tuple, file_pair: tuple[Path, Path]) -> None:
+        """Basic checks for metadata reading."""
+        df, df_ref = parsed_data
+        test_file = file_pair[0]
+        if test_file.suffix == ".zip":
+            with TemporaryDirectory() as tmp_dir, ZipFile(test_file, "r") as zip_test:
+                # unzip file to a temp location and read
+                zip_test.extractall(tmp_dir)
+                test_file = Path(tmp_dir) / test_file.stem
+                df_bdf = fastnda.read(test_file, columns="bdf")
+        else:
+            df_bdf = fastnda.read(test_file, columns="bdf")
+
+        assert "record_index" in df_bdf.columns
+        assert "voltage_volt" in df_bdf.columns
+        assert "current_ampere" in df_bdf.columns
+        assert "unix_time_second" in df_bdf.columns
+        assert "step_time_second" in df_bdf.columns
+        assert "test_time_second" in df_bdf.columns
+        assert "cycle_count" in df_bdf.columns
+        assert "step_count" in df_bdf.columns
+        assert "step_index" in df_bdf.columns
+        assert "step_type" in df_bdf.columns
+        assert "step_capacity_ah" in df_bdf.columns
+        assert "step_energy_wh" in df_bdf.columns
+
+        assert_series_equal(df["current_mA"], df_bdf["current_ampere"] * 1e3, check_names=False)
+        assert_series_equal(df["capacity_mAh"], df_bdf["step_capacity_ah"] * 1e3, check_names=False)
+        assert_series_equal(df["energy_mWh"], df_bdf["step_energy_wh"] * 1e3, check_names=False)
+
+        # Checking correct order of magnitude, more precise value checks in other tests
+        assert_series_equal(
+            df_bdf["current_ampere"],
+            df_ref["Current(uA)"] * 1e-6,
+            abs_tol=5e-5,
+            check_names=False,
+            check_dtypes=False,
+        )
+        assert_series_equal(
+            df_bdf["step_capacity_ah"].abs(),
+            df_ref["Capacity(mAs)"].abs() / 3.6e6,
+            rel_tol=0.01,
+            abs_tol=5e-5,
+            check_names=False,
+            check_dtypes=False,
+        )
+        assert_series_equal(
+            df_bdf["step_energy_wh"].abs(),
+            df_ref["Energy(mWs)"].abs() / 3.6e6,
+            rel_tol=0.01,
+            abs_tol=5e-5,
+            check_names=False,
+            check_dtypes=False,
+        )
