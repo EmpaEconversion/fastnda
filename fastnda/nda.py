@@ -327,6 +327,8 @@ def _read_nda_130(mm: mmap.mmap) -> pl.DataFrame:
 def _read_nda_130_91(mm: mmap.mmap) -> pl.DataFrame:
     """Read nda version 130 BTS9.1."""
     # Data starts at 1024, search forward for next identifier for record length
+    identifier_bytes = mm[1024:1026]
+    identifier_int = int.from_bytes(identifier_bytes, byteorder="little", signed=False)
     record_len = mm.find(mm[1024:1026], 1026) - 1024
 
     arr = _get_arr_from_nda(mm, 1024, record_len)
@@ -348,13 +350,14 @@ def _read_nda_130_91(mm: mmap.mmap) -> pl.DataFrame:
         ("_pad3", "V4"),  # Data here, looks like <f4 doesn't match anything in ref
         ("unix_time_s", "<u4"),
         ("uts_ns", "<u4"),
-        ("aux_temperature_degC", "<f4"),
     ]
+    if record_len >= 56:
+        dtype_list += [("aux_temperature_degC", "<f4")]
     if record_len > 56:
-        dtype_list.append(("_pad4", f"V{record_len - 52}"))
+        dtype_list.append(("_pad4", f"V{record_len - 56}"))
     data_dtype = np.dtype(dtype_list)
 
-    data_df = _mask_arr(arr, data_dtype, 1621).with_columns(
+    data_df = _mask_arr(arr, data_dtype, identifier_int).with_columns(
         [
             pl.col("capacity_mAs").clip(lower_bound=0).alias("charge_capacity_mAh") / 3600,
             pl.col("capacity_mAs").clip(upper_bound=0).abs().alias("discharge_capacity_mAh") / 3600,
