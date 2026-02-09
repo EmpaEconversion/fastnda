@@ -73,7 +73,13 @@ def read_nda_metadata(file: str | Path) -> dict[str, str | int | float]:
         client = mm.read(50).strip(b"\x00").decode()
         metadata["client_version"] = client
     else:
-        logger.info("BTS version not found!")
+        xwj = mm.find(b"BTS_XWJ", 0, 1024)
+        if xwj != -1:
+            end = mm.find(b"\x00", xwj, 1024)
+            if end != -1:
+                metadata["server_version"] = mm[xwj:end].decode().strip()
+        else:
+            logger.info("BTS version not found!")
 
     # NDA 29 specific fields
     if metadata["nda_version"] == 29:
@@ -82,9 +88,25 @@ def read_nda_metadata(file: str | Path) -> dict[str, str | int | float]:
 
     # NDA 130 specific fields
     elif metadata["nda_version"] == 130:
+        subver = int(mm[1024])
+        if subver == 85:
+            metadata["bts_version"] = "9.1"
+            ver = mm.find(b"9.1.")
+            if ver != -1:
+                end = mm.find(b"\x00", ver)
+                if end != 1:
+                    metadata["bts_version"] = mm[ver:end].decode()
+        elif subver == 18:
+            metadata["bts_version"] = "9.0"
+            ver = mm.find(b"9.0.")
+            if ver != -1:
+                end = mm.find(b"\x00", ver)
+                if end != 1:
+                    metadata["bts_version"] = mm[ver:end].decode()
+
         # Identify footer
         footer = mm.rfind(b"\x06\x00\xf0\x1d\x81\x00\x03\x00\x61\x90\x71\x90\x02\x7f\xff\x00", 1024)
-        if footer:
+        if footer != -1:
             mm.seek(footer + 16)
             buf = mm.read(499)
             metadata["active_mass_mg"] = struct.unpack("<d", buf[-8:])[0]
@@ -327,6 +349,8 @@ def _read_nda_130(mm: mmap.mmap) -> pl.DataFrame:
 def _read_nda_130_91(mm: mmap.mmap) -> pl.DataFrame:
     """Read nda version 130 BTS9.1."""
     # Data starts at 1024, search forward for next identifier for record length
+    identifier_bytes = mm[1024:1026]
+    identifier_int = int.from_bytes(identifier_bytes, byteorder="little", signed=False)
     record_len = mm.find(mm[1024:1026], 1026) - 1024
 
     arr = _get_arr_from_nda(mm, 1024, record_len)
@@ -348,13 +372,14 @@ def _read_nda_130_91(mm: mmap.mmap) -> pl.DataFrame:
         ("_pad3", "V4"),  # Data here, looks like <f4 doesn't match anything in ref
         ("unix_time_s", "<u4"),
         ("uts_ns", "<u4"),
-        ("aux_temperature_degC", "<f4"),
     ]
+    if record_len >= 56:
+        dtype_list += [("aux_temperature_degC", "<f4")]
     if record_len > 56:
-        dtype_list.append(("_pad4", f"V{record_len - 52}"))
+        dtype_list.append(("_pad4", f"V{record_len - 56}"))
     data_dtype = np.dtype(dtype_list)
 
-    data_df = _mask_arr(arr, data_dtype, 1621).with_columns(
+    data_df = _mask_arr(arr, data_dtype, identifier_int).with_columns(
         [
             pl.col("capacity_mAs").clip(lower_bound=0).alias("charge_capacity_mAh") / 3600,
             pl.col("capacity_mAs").clip(upper_bound=0).abs().alias("discharge_capacity_mAh") / 3600,
