@@ -298,7 +298,7 @@ def _read_nda_29(mm: mmap.mmap) -> pl.DataFrame:
             ("aux", "<u1"),
             ("index", "<u4"),
             ("_pad2", "V16"),
-            ("aux_voltage_volt", "<i4"),
+            ("aux_voltage_V", "<i4"),
             ("_pad3", "V8"),
             ("aux_temperature_degC", "<i2"),
             ("_pad4", "V50"),
@@ -307,7 +307,7 @@ def _read_nda_29(mm: mmap.mmap) -> pl.DataFrame:
     aux_df = _mask_arr(arr, aux_dtype, 101).with_columns(
         [
             pl.col("aux_temperature_degC").cast(pl.Float32) / 10,  # 0.1'C -> 'C
-            pl.col("aux_voltage_volt").cast(pl.Float32) / 10000,  # 0.1 mV -> V
+            pl.col("aux_voltage_V").cast(pl.Float32) / 10000,  # 0.1 mV -> V
         ]
     )
     return _merge_aux(data_df, aux_df)
@@ -348,7 +348,7 @@ def _read_nda_130_91(mm: mmap.mmap) -> pl.DataFrame:
         ("_pad3", "V4"),  # Data here, looks like <f4 doesn't match anything in ref
         ("unix_time_s", "<u4"),
         ("uts_ns", "<u4"),
-        ("aux_temperature_degC2", "<f4"),
+        ("aux_temperature_degC", "<f4"),
     ]
     if record_len > 56:
         dtype_list.append(("_pad4", f"V{record_len - 52}"))

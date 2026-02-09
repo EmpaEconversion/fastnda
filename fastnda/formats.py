@@ -34,4 +34,15 @@ BDF_MULTIPLIER_MAP: Mapping[str, float] = MappingProxyType(
 def to_bdf(df: pl.DataFrame) -> pl.DataFrame:
     """Convert fastnda dataframe to bdf."""
     df = df.rename(BDF_COL_MAP)
+
+    # Dynamically rename any aux columns
+    rename_map = {}
+    for col in df.columns:
+        if col.endswith("_V"):
+            rename_map[col] = col[:-2] + "_volt"
+        elif col.endswith("_degC"):
+            rename_map[col] = col[:-5] + "_celsius"
+    if rename_map:
+        df = df.rename(rename_map)
+
     return df.with_columns(pl.col(k) * v for k, v in BDF_MULTIPLIER_MAP.items())
