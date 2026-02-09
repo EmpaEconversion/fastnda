@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-02-09
+### Added
+- Option to output with 'Battery Data Format' columns, use `columns="bdf"` or `--columns=bdf`
+- Initial nda 22 and 26 support
+
+# Changed
+- Performance improvements for non-raw cycle mode
+- Repo transferred to https://github.com/EmpaEConversion/fastnda
+
+# Fixed
+- Improved BTS9.1 compatibility
+- Typos in nda aux columns
+
+
 ## [1.0.1] - 2026-01-19
 ### Added
 - `step_type_map` for converting step integer codes
