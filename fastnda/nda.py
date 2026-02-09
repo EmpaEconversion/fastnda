@@ -73,7 +73,13 @@ def read_nda_metadata(file: str | Path) -> dict[str, str | int | float]:
         client = mm.read(50).strip(b"\x00").decode()
         metadata["client_version"] = client
     else:
-        logger.info("BTS version not found!")
+        xwj = mm.find(b"BTS_XWJ", 0, 1024)
+        if xwj != -1:
+            end = mm.find(b"\x00", xwj, 1024)
+            if end != -1:
+                metadata["server_version"] = mm[xwj:end].decode().strip()
+        else:
+            logger.info("BTS version not found!")
 
     # NDA 29 specific fields
     if metadata["nda_version"] == 29:
@@ -82,9 +88,25 @@ def read_nda_metadata(file: str | Path) -> dict[str, str | int | float]:
 
     # NDA 130 specific fields
     elif metadata["nda_version"] == 130:
+        subver = int(mm[1024])
+        if subver == 85:
+            metadata["bts_version"] = "9.1"
+            ver = mm.find(b"9.1.")
+            if ver != -1:
+                end = mm.find(b"\x00", ver)
+                if end != 1:
+                    metadata["bts_version"] = mm[ver:end].decode()
+        elif subver == 18:
+            metadata["bts_version"] = "9.0"
+            ver = mm.find(b"9.0.")
+            if ver != -1:
+                end = mm.find(b"\x00", ver)
+                if end != 1:
+                    metadata["bts_version"] = mm[ver:end].decode()
+
         # Identify footer
         footer = mm.rfind(b"\x06\x00\xf0\x1d\x81\x00\x03\x00\x61\x90\x71\x90\x02\x7f\xff\x00", 1024)
-        if footer:
+        if footer != -1:
             mm.seek(footer + 16)
             buf = mm.read(499)
             metadata["active_mass_mg"] = struct.unpack("<d", buf[-8:])[0]
