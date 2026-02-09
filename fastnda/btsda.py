@@ -48,8 +48,15 @@ dtypes = {
 
 def _time_str_to_float(time_str: str) -> float:
     """Convert hh:mm:ss.ms to (float64) seconds."""
-    h, m, s, ms = re.split(r"[:.]", time_str)
-    return float(h) * 3600 + float(m) * 60 + float(s) + float("0." + ms)
+    times = re.split(r"[:.]", time_str)
+    if len(times) == 4:
+        h, m, s, ms = times
+        return float(h) * 3600 + float(m) * 60 + float(s) + float("0." + ms)
+    if len(times) == 5:
+        h, m, s, ms, us = times
+        return float(h) * 3600 + float(m) * 60 + float(s) + float("0." + ms) + float("0.000" + ms)
+    msg = f"Could not understand time format: {time_str}"
+    raise ValueError(msg)
 
 
 def btsda_csv_to_parquet(csv_file: str | Path, out_file: str | Path | None = None) -> pl.DataFrame:
@@ -99,22 +106,25 @@ def btsda9_xlsx_to_parquet(xlsx_file: str | Path, out_file: str | Path | None = 
     df = pl.read_excel(xlsx_file, infer_schema_length=1000, sheet_name="record")
     if "FlowTimer" in df.columns:
         df = df.rename({"FlowTimer": "Time"})
-    df = df.with_columns(
-        [
-            pl.col("FlowTimer").map_elements(_time_str_to_float, return_dtype=pl.Float64).alias("Total Time"),
-            pl.col("RtcTimer").str.to_datetime(format="%Y-%m-%d %H:%M:%S%.f", time_unit="ms").alias("Date"),
-            (pl.col("Current(mA)") * 1000).alias("Current(uA)"),
-            (pl.col("Voltage(V)") * 1000).alias("Voltage(mV)"),
-            (pl.col("CurrStep_Capacity(mAh)") * 3600).alias("Capacity(mAs)"),
-            (pl.col("CurrStep_Energy(mWh)") * 3600).alias("Energy(mWs)"),
-            pl.col("Step ID").alias("Step Index"),  # Don't know the difference here
-            pl.col("Step ID").alias("Step Count"),
-            pl.col("Cycle ID").alias("Cycle Index"),
-            pl.col("DataSerial").alias("Index"),
-            pl.col("StepType").alias("Step Type"),
-            pl.col("AuxTemp1(Start Temperature)").alias("T1"),
-        ]
-    )
+
+    exprs = [
+        pl.col("Time").map_elements(_time_str_to_float, return_dtype=pl.Float64).alias("Total Time"),
+        pl.col("RtcTimer").str.to_datetime(format="%Y-%m-%d %H:%M:%S%.f", time_unit="ms").alias("Date"),
+        (pl.col("Current(mA)") * 1000).alias("Current(uA)"),
+        (pl.col("Voltage(V)") * 1000).alias("Voltage(mV)"),
+        (pl.col("CurrStep_Capacity(mAh)") * 3600).alias("Capacity(mAs)"),
+        (pl.col("CurrStep_Energy(mWh)") * 3600).alias("Energy(mWs)"),
+        pl.col("Step ID").alias("Step Index"),  # Don't know the difference here
+        pl.col("Step ID").alias("Step Count"),
+        pl.col("Cycle ID").alias("Cycle Index"),
+        pl.col("DataSerial").alias("Index"),
+        pl.col("StepType").alias("Step Type"),
+    ]
+
+    if "AuxTemp1(Start Temperature)" in df.columns:
+        exprs += [pl.col("AuxTemp1(Start Temperature)").alias("T1")]
+
+    df = df.with_columns(exprs)
     max_df = (
         df.group_by("Step ID")
         .agg(pl.col("Total Time").max().alias("Max Total Time"))
