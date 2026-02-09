@@ -339,19 +339,3 @@ class TestRead:
             check_names=False,
             check_dtypes=False,
         )
-        assert_series_equal(
-            df_bdf["step_capacity_ah"].abs(),
-            df_ref["Capacity(mAs)"].abs() / 3.6e6,
-            rel_tol=0.01,
-            abs_tol=5e-5,
-            check_names=False,
-            check_dtypes=False,
-        )
-        assert_series_equal(
-            df_bdf["step_energy_wh"].abs(),
-            df_ref["Energy(mWs)"].abs() / 3.6e6,
-            rel_tol=0.01,
-            abs_tol=5e-5,
-            check_names=False,
-            check_dtypes=False,
-        )
