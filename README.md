@@ -58,6 +58,7 @@ fastnda convert --help  # See how convert function works
 The command-line interface can perform single-file or batch-file conversion to various formats:
 ```shell
 fastnda convert "my/file.ndax"                          # Converts file to "my/file.csv"
+fastnda convert "my/file.ndax" --columns=bdf            # Convert with battery-data-format style columns
 fastnda convert "my/file.ndax" "output/file.parquet"    # Convert file to different location and format
 fastnda convert "my/file.ndax" --format=arrow --pandas  # Convert to old-pandas-compatible arrow
 

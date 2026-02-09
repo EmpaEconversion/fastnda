@@ -32,47 +32,11 @@ def read_ndax(file: str | Path) -> pl.DataFrame:
 
     """
     with zipfile.ZipFile(str(file)) as zf:
-        # Find all auxiliary channel files
-        # Auxiliary files files need to be matched to entries in TestInfo.xml
-        # Sort by the numbers in the filename, assume same order in TestInfo.xml
-        aux_data = []
-        for f in zf.namelist():
-            m = re.search(r"data_AUX_(\d+)_(\d+)_(\d+)\.ndc", f)
-            if m:
-                aux_data.append((f, list(map(int, m.groups()))))
-            else:
-                m = re.search(r".*_(\d+)\.ndc", f)
-                if m:
-                    aux_data.append((f, [int(m.group(1)), 0, 0]))
-
-        # Sort by the three integers
-        aux_data.sort(key=lambda x: x[1])
-        aux_filenames = [f for f, _ in aux_data]
-
-        # Find all auxiliary channel dicts in TestInfo.xml
-        aux_dicts: list[dict] = []
-        if aux_filenames:
-            try:
-                step = zf.read("TestInfo.xml").decode("gb2312")
-                test_info = ElementTree.fromstring(step).find("config/TestInfo")
-                if test_info is not None:
-                    aux_dicts.extend(
-                        {k: int(v) if v.isdigit() else v for k, v in child.attrib.items()}
-                        for child in test_info
-                        if "aux" in child.tag.lower()
-                    )
-            except Exception:
-                logger.exception("Aux files found, but could not read TestInfo.xml!")
-
-        # ASSUME channel files are in the same order as TestInfo.xml, map filenames to dicts
-        if len(aux_dicts) == len(aux_filenames):
-            aux_ch_dict = dict(zip(aux_filenames, aux_dicts, strict=True))
-        else:
-            aux_ch_dict = {}
-            logger.critical("Found a different number of aux channels in files and TestInfo.xml!")
+        # Get auxiliary channel files and info
+        aux_ch_dict = _find_auxiliary_channels(zf)
 
         # Extract and parse all of the .ndc files into dataframes in parallel
-        files_to_read = ["data.ndc", "data_runInfo.ndc", "data_step.ndc", *aux_filenames]
+        files_to_read = ["data.ndc", "data_runInfo.ndc", "data_step.ndc", *aux_ch_dict.keys()]
         dfs = {}
         with ThreadPoolExecutor() as executor:
             futures = {executor.submit(_extract_and_bytes_to_df, zf, fname): fname for fname in files_to_read}
@@ -121,6 +85,54 @@ def read_ndax_metadata(file: str | Path) -> dict[str, str | float]:
             xml_tree = ElementTree.fromstring(zf.read(xml_file).decode(errors="ignore")).find("config")
             metadata[name] = xmltodict.parse(ElementTree.tostring(xml_tree).decode(), attr_prefix="")["config"]
     return metadata
+
+
+def _find_auxiliary_channels(zf: zipfile.ZipFile) -> dict[str, dict]:
+    """Find all auxiliary channel files.
+
+    Args:
+        zf: open zipfile (ndax)
+
+    Returns:
+        dict: keys = filenames, values = dict of attributes of aux channel
+
+    """
+    # Auxiliary files files need to be matched to entries in TestInfo.xml
+    # Sort by the numbers in the filename, assume same order in TestInfo.xml
+    aux_data = []
+    for f in zf.namelist():
+        m = re.search(r"data_AUX_(\d+)_(\d+)_(\d+)\.ndc", f)
+        if m:
+            aux_data.append((f, list(map(int, m.groups()))))
+        else:
+            m = re.search(r".*_(\d+)\.ndc", f)
+            if m:
+                aux_data.append((f, [int(m.group(1)), 0, 0]))
+
+    # Sort by the three integers
+    aux_data.sort(key=lambda x: x[1])
+    aux_filenames = [f for f, _ in aux_data]
+
+    # Find all auxiliary channel dicts in TestInfo.xml
+    aux_dicts: list[dict] = []
+    if aux_filenames:
+        try:
+            step = zf.read("TestInfo.xml").decode("gb2312")
+            test_info = ElementTree.fromstring(step).find("config/TestInfo")
+            if test_info is not None:
+                aux_dicts.extend(
+                    {k: int(v) if v.isdigit() else v for k, v in child.attrib.items()}
+                    for child in test_info
+                    if "aux" in child.tag.lower()
+                )
+        except Exception:
+            logger.exception("Aux files found, but could not read TestInfo.xml!")
+
+    # ASSUME channel files are in the same order as TestInfo.xml, map filenames to dicts
+    if len(aux_dicts) == len(aux_filenames):
+        return dict(zip(aux_filenames, aux_dicts, strict=True))
+    logger.critical("Found a different number of aux channels in files and TestInfo.xml!")
+    return {}
 
 
 def _extract_and_bytes_to_df(zf: zipfile.ZipFile, filename: str) -> tuple[str, pl.DataFrame | None]:
