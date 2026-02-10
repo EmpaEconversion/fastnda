@@ -9,11 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Option to output with 'Battery Data Format' columns, use `columns="bdf"` or `--columns=bdf`
 - Initial nda 22 and 26 support
 
-# Changed
+### Changed
 - Performance improvements for non-raw cycle mode
 - Repo transferred to https://github.com/EmpaEConversion/fastnda
 
-# Fixed
+### Fixed
 - Improved BTS9.1 compatibility
 - Typos in nda aux columns
 
