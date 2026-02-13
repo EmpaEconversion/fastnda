@@ -245,7 +245,7 @@ def _read_nda_22(mm: mmap.mmap) -> pl.DataFrame:
                 pl.col("step_time_s").cast(pl.Float32) / 1000,
                 pl.col("voltage_V").cast(pl.Float32) / 10000,
                 pl.col("range").replace_strict(MULTIPLIER_MAP, return_dtype=pl.Float64).alias("multiplier"),
-                _count_changes(pl.col("step_count")).alias("step_count"),
+                _count_changes(pl.col("step_index")).alias("step_count"),
             ]
         )
         .with_columns(
@@ -443,6 +443,7 @@ def _read_nda_130_90(mm: mmap.mmap) -> pl.DataFrame:
 NDA_READERS: dict[int, Callable[[mmap.mmap], pl.DataFrame]] = {
     8: _read_nda_8,
     22: _read_nda_22,
+    23: _read_nda_22,
     26: _read_nda_29,
     29: _read_nda_29,
     130: _read_nda_130,
