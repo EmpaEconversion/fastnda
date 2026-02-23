@@ -33,12 +33,14 @@ dev = [
     "pyarrow>=23.0.0",
     "pytest>=8.4.1",
     "ruff>=0.12.8",
-    "tables>=3.11.0",
+    "tables>=3.11.0; python_version >= '3.11'",
+    "tables>=3.10.0,<3.11.0; python_version < '3.11'",
 ]
 extras = [
     "pandas>=2.3.1",
     "pyarrow>=23.0.0",
-    "tables>=3.11.0",
+    "tables>=3.11.0; python_version >= '3.11'",
+    "tables>=3.10.0,<3.11.0; python_version < '3.11'",
 ]
 
 [project.scripts]
