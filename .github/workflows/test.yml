@@ -22,6 +22,7 @@ jobs:
           - "3.11"
           - "3.12.12"
           - "3.13"
+          - "3.14"
 
     steps:
       - uses: actions/checkout@v6
@@ -30,10 +31,6 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           activate-environment: "true"
-    
-      - name: Check zlib version
-        run: |
-          uv run python -c "import zlib; print('zlib version:', zlib.ZLIB_VERSION, 'runtime:', zlib.ZLIB_RUNTIME_VERSION)"
     
       - name: Install
         run: |
