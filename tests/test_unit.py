@@ -3,6 +3,7 @@
 
 import datetime
 import mmap
+import struct
 import warnings
 from collections.abc import Callable
 
@@ -92,7 +93,7 @@ def test_nda_aux_merge_no_aux_col() -> None:
 
 
 def test_read_bts9_19_odd_size() -> None:
-    """Test reading the record version 19 struct with different record lengths (52,56,60)."""
+    """Test reading the record version 19 struct at record lengths 52 and 56."""
     _header = bytearray.fromhex(
         (
             "4e455741524532303234303430338200130010b70500000000007b010000000000008bb8050000000000e1010000000000006cba05"
@@ -125,10 +126,6 @@ def test_read_bts9_19_odd_size() -> None:
     assert len(df) == 5
     assert "aux_temperature_degC" in df.columns
 
-    df = _read_from_hex("".join(r + "5040b841aaaaaaaa" for r in records))
-    assert len(df) == 5
-    assert "aux_temperature_degC" in df.columns
-
 
 def _bts9_mm(bts9_version: int, record: bytes) -> mmap.mmap:
     """Build a minimal BTS9 file holding one record, with a given header record version."""
@@ -143,6 +140,42 @@ def _bts9_mm(bts9_version: int, record: bytes) -> mmap.mmap:
     mm.write(data)
     mm.seek(0)
     return mm
+
+
+def _record_60(index: int, total_time_s: int, unix_s: int, temperature: float) -> bytes:
+    """Pack one 60-byte record version 19 struct, whose tail differs from the shorter ones."""
+    return struct.pack(
+        "<HBBIIIIffffIIffIf",
+        _BTS9_IDENTIFIER,  # identifier
+        1,  # step_index
+        1,  # step_type
+        174,  # test_id
+        index,
+        total_time_s,
+        0,  # time_ns
+        1000.0,  # current_mA
+        3.7,  # voltage_V
+        0.0,  # capacity_mAs
+        0.0,  # energy_mWs
+        unix_s,
+        500_000_000,  # uts_ns
+        -0.55,  # unidentified
+        temperature,
+        0,  # cycle_count
+        100.0,  # unidentified
+    )
+
+
+def test_read_bts9_19_60_byte_tail() -> None:
+    """A 60-byte record holds the timestamp before the aux block and the cycle count after it."""
+    records = _record_60(1, 0, 1787219478, 23.5) + _record_60(2, 10, 1787219488, 24.0)
+    df = _read_bts9_19(_bts9_mm(42, records))
+
+    assert len(df) == 2
+    assert df["unix_time_s"].to_list() == [1787219478.5, 1787219488.5]
+    assert df["cycle_count"].to_list() == [1, 1]
+    assert df["aux_temperature_degC"].to_list() == pytest.approx([23.5, 24.0])
+    assert df["voltage_V"].to_list() == pytest.approx([3.7, 3.7])
 
 
 # Identifier at byte 4 at record version 2, at byte 0 at record version 19

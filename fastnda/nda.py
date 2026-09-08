@@ -12,7 +12,7 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
-from fastnda.nda_meta import _read_nda_test_info
+from fastnda.nda_meta import _read_bts9_test_info, _read_nda_test_info
 from fastnda.utils import (
     UnverifiedFormatWarning,
     _add_total_time,
@@ -823,22 +823,51 @@ def _bts9_data_blocks(mm: mmap.mmap) -> list[tuple[int, int]]:
     return blocks
 
 
-def _bts9_record_len(mm: mmap.mmap, blocks: list[tuple[int, int]]) -> int:
-    """Guess the record length at record version 2, which is not held in the header."""
+def _bts9_declared_record_len(mm: mmap.mmap, blocks: list[tuple[int, int]]) -> int | None:
+    """Record length from the point count in the pack test info, if the file states one."""
+    num_points = _read_bts9_test_info(mm).get("num_datapoints")
+    total = sum(length for _, length in blocks)
+    if not isinstance(num_points, int) or not num_points or not total or total % num_points:
+        return None
+    return total // num_points
+
+
+def _bts9_search_record_len(mm: mmap.mmap, blocks: list[tuple[int, int]], signature: bytes) -> int:
+    """Record length from the distance to the next record opening with the same signature."""
     begin, first_len = blocks[0]
     block_end = begin + first_len if first_len else len(mm)
-    # Records open with a constant 4-byte tag (maybe device type?) followed by an identifier
-    tag = mm[begin : begin + 4] + bytes([_BTS9_IDENTIFIER])
-    next_record = mm.find(tag, begin + 1, block_end)
+    next_record = mm.find(signature, begin + 1, block_end)
     # If no next record, it is one record
     record_len = next_record - begin if next_record != -1 else block_end - begin
     if record_len <= 0:
-        msg = f"Could not find a record at {begin} matching record version 2."
+        msg = f"Could not find a BTS9 record at {begin}."
         raise EOFError(msg)
+    return record_len
+
+
+def _bts9_record_len(
+    mm: mmap.mmap,
+    blocks: list[tuple[int, int]],
+    signature: bytes,
+    known_lengths: frozenset[int],
+) -> int:
+    """Get record length from total bytes / num datapoints in header.
+
+    Fall back to searching within the records if header info not available.
+    """
+    record_len = _bts9_declared_record_len(mm, blocks)
+    if record_len is None:
+        record_len = _bts9_search_record_len(mm, blocks, signature)
     # Correct length should integer divide every data block
     if any(length % record_len for _, length in blocks):
-        msg = f"Record length {record_len} at record version 2 does not divide every data block."
+        msg = f"BTS9 record length {record_len} does not divide every data block."
         raise ValueError(msg)
+    if record_len not in known_lengths:
+        msg = (
+            f"No known BTS9 record struct is {record_len} bytes. If you can, please share a sample "
+            "file at https://github.com/empaeconversion/fastnda/issues so we can support this format."
+        )
+        raise NotImplementedError(msg)
     return record_len
 
 
@@ -860,7 +889,10 @@ def _df_from_blocks(
 def _read_bts9_2(mm: mmap.mmap) -> pl.DataFrame:
     """Read BTS9 file version 2."""
     blocks = _bts9_data_blocks(mm)
-    record_len = _bts9_record_len(mm, blocks)
+    begin = blocks[0][0]
+    # Records open with a constant 4-byte tag (maybe device type?) followed by an identifier
+    signature = mm[begin : begin + 4] + bytes([_BTS9_IDENTIFIER])
+    record_len = _bts9_record_len(mm, blocks, signature, frozenset({88}))
     dtype = np.dtype(
         [
             ("_pad1", "V4"),  # btDevType, btDevID, btUnitID, btChlID
@@ -894,6 +926,84 @@ def _read_bts9_2(mm: mmap.mmap) -> pl.DataFrame:
             _count_changes(pl.col("step_index")).alias("step_count"),
         ]
     )
+
+
+# First 36 bytes of a record version 19 struct, the same at every record length
+_BTS9_19_HEAD: list[tuple[str, str]] = [
+    ("identifier", "<u2"),
+    ("step_index", "<u1"),
+    ("step_type", "<u1"),
+    ("_pad2", "V4"),  # could be test_id
+    ("index", "<u4"),
+    ("total_time_s", "<u4"),
+    ("time_ns", "<u4"),
+    ("current_mA", "<f4"),
+    ("voltage_V", "<f4"),
+    ("capacity_mAs", "<f4"),
+    ("energy_mWs", "<f4"),
+]
+
+# Extra fields in BTS9_19 record
+_BTS9_19_TAIL_52: list[tuple[str, str]] = [
+    ("cycle_count", "<u4"),
+    ("_pad3", "V4"),  # f4, does not match anything in the reference
+    ("unix_time_s", "<u4"),
+    ("uts_ns", "<u4"),
+]
+_BTS9_19_TAIL_60: list[tuple[str, str]] = [
+    ("unix_time_s", "<u4"),
+    ("uts_ns", "<u4"),
+    ("_pad3", "V4"),  # f4, drifts slowly, unidentified
+    ("aux_temperature_degC", "<f4"),
+    ("cycle_count", "<u4"),
+    ("_pad4", "V4"),  # f4, does not match anything in the reference
+]
+
+
+# Record length -> tail, since the file does not state which struct it holds
+_BTS9_19_DTYPES = {
+    52: [*_BTS9_19_HEAD, *_BTS9_19_TAIL_52],
+    56: [*_BTS9_19_HEAD, *_BTS9_19_TAIL_52, ("aux_temperature_degC", "<f4")],
+    60: [*_BTS9_19_HEAD, *_BTS9_19_TAIL_60],
+}
+
+
+def _read_bts9_19(mm: mmap.mmap) -> pl.DataFrame:
+    """Read the record struct introduced at record version 19, used by nda 130."""
+    # Search forward from the first record for the next identifier to get the record length
+    blocks = _bts9_data_blocks(mm)
+    begin = blocks[0][0]
+    identifier_bytes = mm[begin : begin + 2]
+    identifier_int = int.from_bytes(identifier_bytes, byteorder="little", signed=False)
+    record_len = _bts9_record_len(mm, blocks, identifier_bytes, frozenset(_BTS9_19_DTYPES))
+
+    # In this struct, data and aux are in the same rows
+    data_dtype = np.dtype(_BTS9_19_DTYPES[record_len])
+
+    data_df = _df_from_blocks(mm, blocks, record_len, data_dtype, identifier_int).with_columns(
+        [
+            pl.col("capacity_mAs").clip(lower_bound=0).alias("charge_capacity_mAh") / 3600,
+            pl.col("capacity_mAs").clip(upper_bound=0).abs().alias("discharge_capacity_mAh") / 3600,
+            pl.col("energy_mWs").clip(lower_bound=0).alias("charge_energy_mWh") / 3600,
+            pl.col("energy_mWs").clip(upper_bound=0).abs().alias("discharge_energy_mWh") / 3600,
+            (pl.col("total_time_s") + pl.col("time_ns") / 1e9).cast(pl.Float64),
+            (pl.col("unix_time_s") + pl.col("uts_ns") / 1e9).alias("unix_time_s"),
+            pl.col("cycle_count") + 1,
+            _count_changes(pl.col("step_index")).alias("step_count"),
+        ]
+    )
+    # Need to calculate step times - not included in this NDA
+    max_df = (
+        data_df.group_by("step_count")
+        .agg(pl.col("total_time_s").max().alias("max_total_time_s"))
+        .sort("step_count")
+        .with_columns(pl.col("max_total_time_s").shift(1).fill_null(0))
+    )
+
+    data_df = data_df.join(max_df, on="step_count", how="left").with_columns(
+        (pl.col("total_time_s") - pl.col("max_total_time_s")).alias("step_time_s")
+    )
+    return data_df.drop(["uts_ns", "energy_mWs", "capacity_mAs", "time_ns", "max_total_time_s"])
 
 
 def _bts9_probe_reader(mm: mmap.mmap) -> Callable[[mmap.mmap], pl.DataFrame]:
@@ -930,65 +1040,6 @@ def _bts9_reader(mm: mmap.mmap) -> Callable[[mmap.mmap], pl.DataFrame]:
 def _read_bts9(mm: mmap.mmap) -> pl.DataFrame:
     """Read an nda version 129 or 130 file, with the struct its record version calls for."""
     return _bts9_reader(mm)(mm)
-
-
-def _read_bts9_19(mm: mmap.mmap) -> pl.DataFrame:
-    """Read the record struct introduced at record version 19, used by nda 130."""
-    # Search forward from the first record for the next identifier to get the record length
-    blocks = _bts9_data_blocks(mm)
-    begin = blocks[0][0]
-    identifier_bytes = mm[begin : begin + 2]
-    identifier_int = int.from_bytes(identifier_bytes, byteorder="little", signed=False)
-    record_len = mm.find(identifier_bytes, begin + 2) - begin
-
-    # In this struct, data and aux are in the same rows
-    dtype_list = [
-        ("identifier", "<u2"),
-        ("step_index", "<u1"),
-        ("step_type", "<u1"),
-        ("_pad2", "V4"),
-        ("index", "<u4"),
-        ("total_time_s", "<u4"),
-        ("time_ns", "<u4"),
-        ("current_mA", "<f4"),
-        ("voltage_V", "<f4"),
-        ("capacity_mAs", "<f4"),
-        ("energy_mWs", "<f4"),
-        ("cycle_count", "<u4"),
-        ("_pad3", "V4"),  # Data here, looks like <f4 doesn't match anything in ref
-        ("unix_time_s", "<u4"),
-        ("uts_ns", "<u4"),
-    ]
-    if record_len >= 56:
-        dtype_list += [("aux_temperature_degC", "<f4")]
-    if record_len > 56:
-        dtype_list.append(("_pad4", f"V{record_len - 56}"))
-    data_dtype = np.dtype(dtype_list)
-
-    data_df = _df_from_blocks(mm, blocks, record_len, data_dtype, identifier_int).with_columns(
-        [
-            pl.col("capacity_mAs").clip(lower_bound=0).alias("charge_capacity_mAh") / 3600,
-            pl.col("capacity_mAs").clip(upper_bound=0).abs().alias("discharge_capacity_mAh") / 3600,
-            pl.col("energy_mWs").clip(lower_bound=0).alias("charge_energy_mWh") / 3600,
-            pl.col("energy_mWs").clip(upper_bound=0).abs().alias("discharge_energy_mWh") / 3600,
-            (pl.col("total_time_s") + pl.col("time_ns") / 1e9).cast(pl.Float64),
-            (pl.col("unix_time_s") + pl.col("uts_ns") / 1e9).alias("unix_time_s"),
-            pl.col("cycle_count") + 1,
-            _count_changes(pl.col("step_index")).alias("step_count"),
-        ]
-    )
-    # Need to calculate step times - not included in this NDA
-    max_df = (
-        data_df.group_by("step_count")
-        .agg(pl.col("total_time_s").max().alias("max_total_time_s"))
-        .sort("step_count")
-        .with_columns(pl.col("max_total_time_s").shift(1).fill_null(0))
-    )
-
-    data_df = data_df.join(max_df, on="step_count", how="left").with_columns(
-        (pl.col("total_time_s") - pl.col("max_total_time_s")).alias("step_time_s")
-    )
-    return data_df.drop(["uts_ns", "energy_mWs", "capacity_mAs", "time_ns", "max_total_time_s"])
 
 
 # NDA FileVer code -> struct type reader

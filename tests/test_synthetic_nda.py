@@ -1366,8 +1366,8 @@ class TestReadNda129:
         """A zero-length data block has no record to measure."""
         mm = _make_mmap(bytes(200))
 
-        with pytest.raises(EOFError, match=r"matching record version 2"):
-            nda._bts9_record_len(mm, [(200, 0)])
+        with pytest.raises(EOFError, match=r"Could not find a BTS9 record"):
+            nda._bts9_record_len(mm, [(200, 0)], bytes(5), frozenset({88}))
 
     def test_record_len_must_divide_every_block(self) -> None:
         """A record length that leaves a partial record in another block is rejected."""
@@ -1376,7 +1376,16 @@ class TestReadNda129:
         mm = _make_mmap(bytes(2048) + rows)
 
         with pytest.raises(ValueError, match="does not divide every data block"):
-            nda._bts9_record_len(mm, [(2048, len(rows)), (2048, record_len + 1)])
+            nda._bts9_record_len(mm, [(2048, len(rows)), (2048, record_len + 1)], rows[:5], frozenset({88}))
+
+    def test_unknown_record_length_raises(self) -> None:
+        """A record length with no matching struct is rejected rather than padded."""
+        signature = bytes([0xAA, 0xBB, 0xCC, 0xDD])
+        data = (signature + bytes(36)) * 4
+        mm = _make_mmap(bytes(2048) + data)
+
+        with pytest.raises(NotImplementedError, match=r"No known BTS9 record struct is 40 bytes"):
+            nda._bts9_record_len(mm, [(2048, len(data))], signature, frozenset({88}))
 
 
 class TestReadNda13090:
