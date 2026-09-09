@@ -2,13 +2,23 @@
 """Utility functions for processing Neware data."""
 
 import logging
-from typing import Literal
+import operator
+from functools import reduce
+from typing import TYPE_CHECKING, Literal
 
 import polars as pl
 
 from fastnda.dicts import CHARGE_DISCHARGE_MAP
 
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
 logger = logging.getLogger(__name__)
+
+
+def _is_in(col: pl.Expr, values: "Iterable[int]") -> pl.Expr:
+    """Faster version of .is_in(x) for small integer sets, just chains ORs instead of hashing."""
+    return reduce(operator.or_, (col == value for value in values))
 
 
 def _generate_cycle_number(
@@ -30,7 +40,7 @@ def _generate_cycle_number(
     if len(df) == 0:
         return df
 
-    if df.select(pl.col("step_type").is_in({16, 17, 25}).any()).item():
+    if df.select(_is_in(pl.col("step_type"), (16, 17, 25)).any()).item():
         logger.warning(
             "Data contains Pulse, SIM, or Ramp steps. "
             "This might give unexpected cycle numbers with 'chg' 'dchg' or 'auto' mode. "
@@ -79,7 +89,7 @@ def _count_changes(*series: pl.Expr) -> pl.Expr:
 def _id_first_state(df: pl.DataFrame) -> Literal["chg", "dchg"]:
     """Identify the first non-rest state in the DataFrame."""
     # Filter on non-rest keys, check first row
-    filtered = df.filter(pl.col("step_type").is_in(CHARGE_DISCHARGE_MAP)).head(1)
+    filtered = df.filter(_is_in(pl.col("step_type"), CHARGE_DISCHARGE_MAP)).head(1)
     if not filtered.is_empty() and CHARGE_DISCHARGE_MAP[filtered[0, "step_type"]] == 1:
         return "chg"
     return "dchg"

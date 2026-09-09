@@ -8,7 +8,7 @@ import numpy as np
 import polars as pl
 
 from fastnda._ndc.ndc_utils import bytes_to_df
-from fastnda.utils import _count_changes, _range_to_mult
+from fastnda.utils import _count_changes, _is_in, _range_to_mult
 
 
 def read_ndc_main_1(buf: bytes) -> pl.DataFrame:
@@ -476,9 +476,9 @@ def read_ndc_main_15(buf: bytes) -> pl.DataFrame:
     is_absed = pl.col("step_type_raw").ne(_NDC15_SIM)
     # Multiply by 1/3600 for charge/SIM or -1/3600 for discharge
     mult = (
-        pl.when(pl.col("step_type_raw").is_in(_NDC15_POS))
+        pl.when(_is_in(pl.col("step_type_raw"), _NDC15_POS))
         .then(1 / 3600)
-        .otherwise(pl.when(pl.col("step_type_raw").is_in(_NDC15_NEG)).then(-1 / 3600).otherwise(0.0))
+        .otherwise(pl.when(_is_in(pl.col("step_type_raw"), _NDC15_NEG)).then(-1 / 3600).otherwise(0.0))
     )
 
     exprs.append(
