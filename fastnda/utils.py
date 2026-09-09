@@ -135,7 +135,6 @@ def _add_total_time(df: pl.DataFrame) -> pl.DataFrame:
 
 def _drop_empty(df: pl.DataFrame, cols: list[str] | None) -> pl.DataFrame:
     """Drop empty columns."""
-    # Drop empty columns
     if cols is None:
         cols = df.columns
     cols_to_drop = [c for c in cols if df.filter(pl.col(c) != 0).is_empty()]
