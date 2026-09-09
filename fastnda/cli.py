@@ -281,7 +281,7 @@ def batch_convert(  # noqa: D417
             _convert_with_type(
                 in_file, out_file, file_format, cycle_mode, columns, pandas=pandas, raw_categories=raw_categories
             )
-        except (ValueError, BadZipFile, KeyError, AttributeError):
+        except (ValueError, BadZipFile, KeyError, AttributeError, NotImplementedError, EOFError):
             LOGGER.exception("Failed to convert %s.", in_file)
 
 
@@ -415,7 +415,7 @@ def batch_convert_metadata(
             metadata = read_metadata(in_file)
             with out_file.open("w") as f:
                 json.dump(metadata, f, indent=_json_indent(indent))
-        except (ValueError, BadZipFile, KeyError, AttributeError):
+        except (ValueError, BadZipFile, KeyError, AttributeError, NotImplementedError, EOFError):
             LOGGER.exception("Failed to convert metadata for %s.", in_file)
 
 
