@@ -18,6 +18,7 @@ from fastnda.utils import (
     _add_total_time,
     _count_changes,
     _drop_empty,
+    _is_in,
     _range_to_mult,
     _step_sign,
 )
@@ -44,6 +45,9 @@ def read_nda(file: str | Path) -> pl.DataFrame:
         # Parse binary data to dataframe
         df = _read_nda(mm)
 
+    # If index already sorted and deduped, skip slow unique() and sort()
+    if (df["index"].diff() > 0).all():
+        return df
     # Drop duplicate indexes and sort
     df = df.unique(subset="index")
     return df.sort(by="index")
@@ -317,7 +321,7 @@ def _read_nda_3(mm: mmap.mmap) -> pl.DataFrame:
     start_time_s = _read_nda_start_time_s(mm, 3)
     df = (
         _view_arr(arr, dtype)
-        .filter(pl.col("identifier").is_in([0, 85]))
+        .filter(_is_in(pl.col("identifier"), (0, 85)))
         .drop("identifier")
         .with_columns(
             [
@@ -368,7 +372,7 @@ def _read_nda_5(mm: mmap.mmap) -> pl.DataFrame:
     cycle_offset = 1 if nda_version in (5, 7) else 0
     return (
         _view_arr(arr, dtype)
-        .filter(pl.col("identifier").is_in([0, 85]))
+        .filter(_is_in(pl.col("identifier"), (0, 85)))
         .drop("identifier")
         .with_columns(
             [
