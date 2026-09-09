@@ -44,6 +44,9 @@ def read_nda(file: str | Path) -> pl.DataFrame:
         # Parse binary data to dataframe
         df = _read_nda(mm)
 
+    # If index already sorted and deduped, skip slow unique() and sort()
+    if (df["index"].diff() > 0).all():
+        return df
     # Drop duplicate indexes and sort
     df = df.unique(subset="index")
     return df.sort(by="index")
