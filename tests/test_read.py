@@ -291,7 +291,11 @@ class TestRead:
         columns = ["capacity_mAh"]
         if "Energy(mWs)" in df_ref.columns and "energy_mWh" in df.columns:
             columns.append("energy_mWh")
-        exprs = [pl.col("step_time_s").diff().over("step_count").alias("time_diff"), pl.col("current_mA")]
+        exprs = [
+            pl.col("step_time_s").diff().over("step_count").alias("time_diff"),
+            pl.col("current_mA"),
+            pl.col("capacity_mAh").abs().alias("capacity_abs"),
+        ]
         for col in columns:
             exprs += [
                 pl.col(col).diff().over("step_count").alias(f"{col}_diff"),
@@ -300,13 +304,21 @@ class TestRead:
         diffs = df.select(exprs).drop_nulls()
         static = diffs.filter(pl.col("time_diff") == 0)
         moving = diffs.filter(pl.col("time_diff") != 0)
+        if not len(moving):
+            return
+        # An increment this much smaller than the running total rounds away in float32
+        float32_resolution = 4 * 2.0**-23
+        resolvable = (pl.col("current_mA").abs() * pl.col("time_diff") / 3600) > (
+            float32_resolution * pl.col("capacity_abs")
+        )
 
         # Energy sign is not strictly accurate, but is how Neware treats it - see #77
         for col in columns:
             label = col.rsplit("_", 1)[0]
             n_static = int((static[f"{col}_growth"] > 0).sum())
             assert not n_static, f"{n_static} {label} increments accumulate while step time does not advance."
-            mismatch = (moving[f"{col}_diff"].sign() != moving["current_mA"].sign()).mean()
+            wrong_sign = pl.col(f"{col}_diff").sign() != pl.col("current_mA").sign()
+            mismatch = moving.select((wrong_sign & resolvable).sum()).item() / len(moving)
             if mismatch:
                 assert mismatch < 0.005, f"{mismatch:.3%} of {label} increments disagree in sign with current."
                 if mismatch > 0.001:
