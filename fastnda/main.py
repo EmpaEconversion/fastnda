@@ -47,16 +47,16 @@ def read(
     """
     # Read file and generate DataFrame
     file = Path(file)
-    if file.suffix == ".nda":
+    if file.suffix.lower() == ".nda":
         from fastnda.nda import read_nda
 
         df = read_nda(file)
-    elif file.suffix == ".ndax":
+    elif file.suffix.lower() == ".ndax":
         from fastnda.ndax import read_ndax
 
         df = read_ndax(file)
     else:
-        msg = "File type not supported!"
+        msg = "File type not supported! Supported file types are '.nda' and '.ndax'."
         raise ValueError(msg)
 
     # Generate cycle number if requested or missing
@@ -140,5 +140,5 @@ def read_metadata(file: str | Path) -> dict[str, str | float]:
         from fastnda.ndax import read_ndax_metadata
 
         return read_ndax_metadata(file)
-    msg = "File type not supported!"
+    msg = "File type not supported! Supported file types are '.nda' and '.ndax'."
     raise ValueError(msg)

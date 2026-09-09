@@ -34,7 +34,7 @@ class TestMetaData:
         test_file = file_pair[0]
         metadata = _read_metadata(test_file)
         assert isinstance(metadata, dict)
-        if test_file.suffix == ".ndax":
+        if test_file.suffix.lower() == ".ndax":
             assert "VersionInfo" in metadata
             assert "Step" in metadata
             assert "TestInfo" in metadata
