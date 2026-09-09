@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2026-09-09
+### Changed
+- Performance improvements
+- Unsupported BTS9 .nda files raise `NotImplementedError` (previously returned nonsense)
+
+### Fixed
+- Data structs for several .nda types
+- Aux columns for several .nda types
+- Cycle count on several .nda types
+- Unix time for early .nda versions
+- Large .nda files with non-contiguous data blocks
+- Crash rounding time columns when absent from the raw data
+- File extension check is no longer case sensitive (e.g. `.NDA`)
+- CLI batch commands no longer stop early when one file is unsupported
+
 ## [1.3.0] - 2026-08-06
 ### Added
 - Support for all known .ndax (10 new file versions)
