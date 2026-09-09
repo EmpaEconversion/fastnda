@@ -284,3 +284,45 @@ def test_pilogex_field_offset_varies() -> None:
 def test_pilogex_no_ip() -> None:
     """A piLogEx block with no IP-shaped field yields nothing rather than a partial string."""
     assert _read_pilogex_fields(bytes(64) + b"not-an-ip" + bytes(64)) == {}
+
+
+class Reached(BaseException):
+    """Error to signal a function was reached."""
+
+
+def reached(*args, **kwargs) -> None:  # noqa: ARG001, ANN002, ANN003
+    """Raise 'Reached' error."""
+    raise Reached
+
+
+def test_supported_filetypes(monkeypatch: pytest.MonkeyPatch) -> None:
+    """File types are case insensitive and dispatch to the correct reader."""
+    with monkeypatch.context() as m:
+        m.setattr("fastnda.nda.read_nda", reached)
+        for suf in [".nda", ".nDa", ".NDA"]:
+            with pytest.raises(Reached):
+                fastnda.read("thing" + suf)
+
+    with monkeypatch.context() as m:
+        m.setattr("fastnda.nda_meta.read_nda_metadata", reached)
+        for suf in [".nda", ".nDa", ".NDA"]:
+            with pytest.raises(Reached):
+                fastnda.read_metadata("thing" + suf)
+
+    with monkeypatch.context() as m:
+        m.setattr("fastnda.ndax.read_ndax", reached)
+        for suf in [".ndax", ".nDaX", ".NDAX"]:
+            with pytest.raises(Reached):
+                fastnda.read("thing" + suf)
+
+    with monkeypatch.context() as m:
+        m.setattr("fastnda.ndax.read_ndax_metadata", reached)
+        for suf in [".ndax", ".nDaX", ".NDAX"]:
+            with pytest.raises(Reached):
+                fastnda.read_metadata("thing" + suf)
+
+    for suf in [".NnDdAaXx", ".csv", ".foo", ""]:
+        with pytest.raises(ValueError, match="File type not supported"):
+            fastnda.read("thing" + suf)
+        with pytest.raises(ValueError, match="File type not supported"):
+            fastnda.read_metadata("thing" + suf)

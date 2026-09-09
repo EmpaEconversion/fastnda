@@ -56,7 +56,7 @@ class TestRead:
     def test_wrong_filetype(self) -> None:
         """Test using the wrong file."""
         test_file = Path(r"wrong_file.csv")
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="File type not supported"):
             fastnda.read(test_file)
 
     def test_file_columns(self, parsed_data: tuple) -> None:
