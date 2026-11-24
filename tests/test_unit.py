@@ -1,11 +1,11 @@
 # Copyright © 2026, Empa.
 """Unit tests for functions outside of utils."""
 
-import datetime
 import mmap
 import struct
 import warnings
 from collections.abc import Callable
+from datetime import datetime, timezone
 
 import polars as pl
 import pytest
@@ -216,7 +216,7 @@ def _pstr(text: str) -> bytes:
 
 def _micros(iso: str) -> bytes:
     """Encode an ISO timestamp as the little-endian microsecond epoch the records use."""
-    stamp = datetime.datetime.fromisoformat(iso).replace(tzinfo=datetime.timezone.utc)
+    stamp = datetime.fromisoformat(iso).replace(tzinfo=timezone.utc)
     return int(stamp.timestamp() * 1_000_000).to_bytes(8, "little")
 
 

@@ -1,8 +1,8 @@
 # Copyright © 2026, Empa.
 """Ensure functions behave for missing/unknown files."""
 
-import datetime
 import mmap
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -92,7 +92,7 @@ class TestMissing:
     def test_pack_test_info_old_no_version_string(self) -> None:
         """A record with timestamps but no version string at either chain offset gives empty metadata."""
         record = bytearray(512)
-        start = int(datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc).timestamp() * 1e6)
+        start = int(datetime(2024, 1, 1, tzinfo=timezone.utc).timestamp() * 1e6)
         record[200:208] = start.to_bytes(8, "little")
         record[208:216] = (start + 3600 * 1_000_000).to_bytes(8, "little")
         assert _find_version_pstring(record) is None
