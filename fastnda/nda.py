@@ -1,12 +1,12 @@
 # Copyright © 2026, Empa.
 """Module to read Neware NDA files."""
 
-import datetime
 import logging
 import mmap
 import warnings
 from collections.abc import Callable
 from contextlib import suppress
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -63,7 +63,7 @@ def _read_nda_start_time_s(mm: mmap.mmap, nda_version: int) -> float | None:
         return None
     for fmt in _START_TIME_FORMATS:
         with suppress(ValueError):
-            return datetime.datetime.strptime(start_time, fmt).replace(tzinfo=datetime.timezone.utc).timestamp()
+            return datetime.strptime(start_time, fmt).replace(tzinfo=timezone.utc).timestamp()
     return None
 
 

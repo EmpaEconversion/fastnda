@@ -1,12 +1,12 @@
 # Copyright © 2026, Empa.
 """Read metadata from Neware .nda files."""
 
-import datetime
 import logging
 import mmap
 import re
 import warnings
 from collections.abc import Callable
+from datetime import datetime, timezone
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -28,10 +28,9 @@ def _decode_datetime_us(raw: bytes) -> str | None:
     if not micros:
         return None
     try:
-        dt = datetime.datetime.fromtimestamp(micros / 1e6, tz=datetime.timezone.utc)
+        return datetime.fromtimestamp(micros / 1e6, tz=timezone.utc).isoformat(timespec="milliseconds")
     except (OSError, OverflowError, ValueError):
         return None
-    return dt.isoformat(timespec="milliseconds")
 
 
 def _decode_hex(raw: bytes) -> str | None:
@@ -233,8 +232,8 @@ _FIELDS_NEW: dict[str, tuple[int, str]] = {
 _NEW_TAIL_AT: dict[int, int] = {19: 424, 42: 552}
 
 # Microsecond epoch bounds used to recognise the start_time/stop_time pair in a record
-_TIMESTAMP_MIN_US = int(datetime.datetime(2005, 1, 1, tzinfo=datetime.timezone.utc).timestamp() * 1e6)
-_TIMESTAMP_MAX_US = int(datetime.datetime(2035, 1, 1, tzinfo=datetime.timezone.utc).timestamp() * 1e6)
+_TIMESTAMP_MIN_US = int(datetime(2005, 1, 1, tzinfo=timezone.utc).timestamp() * 1e6)
+_TIMESTAMP_MAX_US = int(datetime(2035, 1, 1, tzinfo=timezone.utc).timestamp() * 1e6)
 _MAX_TEST_DURATION_US = 5 * 365 * 24 * 3600 * 1_000_000
 
 # Version string like "9.1.5.7.20250527.R5", 4+ dot-groups
